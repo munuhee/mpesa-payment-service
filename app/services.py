@@ -71,6 +71,4 @@ def initiate_stk_push(phone_number, amount):
         json = payload,
         timeout = 1000
         )
-    print(response.text.encode('utf8'))
-
     return response.json()
