@@ -1,0 +1,53 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        python3 -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run pylint
+      run: |
+        pip install pylint
+        pylint ./app ./tests --fail-under=8.5
+
+    - name: Run Tests and Calculate Coverage
+      run: |
+        export FLASK_ENV=testing
+        export SECRET_KEY=${{ secrets.SECRET_KEY }}
+        export CONSUMER_KEY=${{ secrets.CONSUMER_KEY }}
+        export CONSUMER_SECRET=${{ secrets.CONSUMER_SECRET }}
+        export SHORTCODE=${{ secrets.SHORTCODE }}
+        export PASSKEY=${{ secrets.PASSKEY }}
+        export CONFIRMATION_URL=${{ secrets.CONFIRMATION_URL }}
+        export VALIDATION_URL=${{ secrets.VALIDATION_URL }}
+        export SQLALCHEMY_DATABASE_URI=${{ secrets.SQLALCHEMY_DATABASE_URI }}
+
+        pip install pytest pytest-cov
+        pytest -c pytest.ini --cov --cov-fail-under=90
+
+    - name: Build and push the Docker image
+      uses: mr-smithers-excellent/docker-build-push@v6
+      with:
+        image: munuhee/payment-service
+        tags: v1, latest
+        registry: docker.io
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
