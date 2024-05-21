@@ -1,6 +1,6 @@
 """Endpoints for initiating payments."""
 from flask import request, jsonify
-from app import app, db, services, models
+from app import app, services
 
 @app.route('/initiate_mpesa_stk_push', methods=['POST'])
 def initiate_mpesa_stk_push():
@@ -35,22 +35,41 @@ def initiate_mpesa_stk_push():
         return jsonify({'error': 'Invalid amount.'}), 400
 
     # Initiate STK push
-    response = services.initiate_stk_push(phone_number, amount)
+    response = services.initiate_stk_push(full_name, phone_number, amount)
 
     # Check if STK push initiation was successful
     if 'ResponseCode' in response and response['ResponseCode'] == '0':
-        checkout_request_id = response.get('CheckoutRequestID')
-        new_transaction = models.MpesaTransaction(
-            full_name=full_name,
-            phone_number=phone_number,
-            amount=amount,
-            checkout_request_id=checkout_request_id,
-            status='Pending'
-        )
-        db.session.add(new_transaction)
-        db.session.commit()
         return jsonify(response), 200
 
     # Handle error response
     error_message = response.get('ResponseDescription', 'Unknown error occurred.')
+    return jsonify({'error': error_message}), 500
+
+@app.route('/query_transaction_status', methods=['POST'])
+def query_transaction_status():
+    """
+    Query transaction status for M-Pesa payment.
+
+    Args:
+        checkout_request_id (str): ID of the checkout request.
+
+    Returns:
+        dict: Response from the transaction status query.
+    """
+    # Get checkout request ID from request
+    checkout_request_id = request.json.get('checkout_request_id')
+
+    # Check if checkout request ID is provided
+    if not checkout_request_id:
+        return jsonify({'error': 'Checkout request ID is required.'}), 400
+
+    # Query transaction status
+    response = services.query_transaction_status(checkout_request_id)
+
+    # Check if the response contains transaction status information
+    if 'ResponseCode' in response:
+        return jsonify(response), 200
+
+    # Handle error response
+    error_message = response.get('errorMessage', 'Unknown error occurred.')
     return jsonify({'error': error_message}), 500

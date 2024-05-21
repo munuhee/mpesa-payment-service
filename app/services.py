@@ -1,9 +1,11 @@
-"""Functions for interacting with the M-Pesa API."""
+"""
+Module providing functions for interacting with the M-Pesa API.
+"""
 
 import base64
 from datetime import datetime
 import requests
-from app import app
+from app import app, db, models
 
 def generate_access_token():
     """Generate access token for M-Pesa API authentication."""
@@ -11,64 +13,104 @@ def generate_access_token():
     consumer_secret = app.config['MPESA_CONSUMER_SECRET']
 
     # Concatenate consumer key and consumer secret
-    auth_string = consumer_key + ':' + consumer_secret
-
+    auth_string = f"{consumer_key}:{consumer_secret}"
     # Encode the auth string in base64
     encoded_auth_string = base64.b64encode(auth_string.encode()).decode('utf-8')
+    headers = {'Authorization': f'Basic {encoded_auth_string}'}
 
-    # Set headers for token request
-    headers = {
-        'Authorization': f'Basic {encoded_auth_string}'
-    }
-
-    # Make request for access token
     response = requests.get(
         'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials',
         headers=headers,
         timeout=10
-        )
-
-    # Extract access token from response
+    )
     access_token = response.json()['access_token']
-
     return access_token
 
-def initiate_stk_push(phone_number, amount):
-    """Initiate STK push for M-Pesa payment."""
-    access_token = generate_access_token()
-
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'Bearer {access_token}'
-    }
-
-    # Generate timestamp
+def generate_password():
+    """Generate password for M-Pesa transactions."""
     timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-
     # Concatenate Shortcode, Passkey, and Timestamp
     concat_string = f"{app.config['MPESA_SHORTCODE']}{app.config['MPESA_PASSKEY']}{timestamp}"
-
     # Encode the concatenated string to base64
-    password = base64.b64encode(concat_string.encode()).decode()
+    return base64.b64encode(concat_string.encode()).decode()
+
+# Initiate STK push for M-Pesa payment
+def initiate_stk_push(full_name, phone_number, amount):
+    """Initiate STK push for M-Pesa payment."""
+    access_token = generate_access_token()
+    headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {access_token}'}
+    password = generate_password()
 
     payload = {
         "BusinessShortCode": int(app.config['MPESA_SHORTCODE']),
         "Password": password,
-        "Timestamp": timestamp,
+        "Timestamp": datetime.now().strftime('%Y%m%d%H%M%S'),
         "TransactionType": "CustomerPayBillOnline",
         "Amount": amount,
         "PartyA": phone_number,
         "PartyB": int(app.config['MPESA_SHORTCODE']),
         "PhoneNumber": phone_number,
-        "CallBackURL": "https://5133-102-217-157-209.ngrok-free.app/mpesa_callback",
+        "CallBackURL": "https://d324-102-217-157-209.ngrok-free.app/mpesa_callback",
         "AccountReference": "CompanyXLTD",
         "TransactionDesc": "Payment of X"
     }
-    response = requests.request(
-        "POST",
+
+    response = requests.post(
         'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest',
-        headers = headers,
-        json = payload,
-        timeout = 1000
+        headers=headers,
+        json=payload,
+        timeout=10
+    )
+
+    response_data = response.json()
+
+    # Save transaction details to database if the request was accepted for processing
+    if 'ResponseCode' in response_data and response_data['ResponseCode'] == '0':
+        checkout_request_id = response_data.get('CheckoutRequestID')
+        transaction = models.MpesaTransaction(
+            full_name=full_name,
+            phone_number=phone_number,
+            amount=amount,
+            checkout_request_id=checkout_request_id,
+            status='Pending'
         )
-    return response.json()
+        db.session.add(transaction)
+        db.session.commit()
+
+    return response_data
+
+def query_transaction_status(checkout_request_id):
+    """Query transaction status."""
+    access_token = generate_access_token()
+    headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {access_token}'}
+    password = generate_password()
+    timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+    business_short_code = int(app.config['MPESA_SHORTCODE'])
+
+    query_data = {
+        "BusinessShortCode": business_short_code,
+        "Password": password,
+        "Timestamp": timestamp,
+        "CheckoutRequestID": checkout_request_id
+    }
+
+    response = requests.post(
+        'https://sandbox.safaricom.co.ke/mpesa/transactionstatus/v1/query',
+        json=query_data,
+        headers=headers,
+        timeout=10
+    )
+
+    # Save transaction details to database if the request was accepted for processing
+    if 'ResultCode' in response and response['ResultCode'] == '0':
+        transaction = models.MpesaTransaction.query.filter_by(checkout_request_id=checkout_request_id).first()
+        if transaction:
+            transaction.status = 'Completed'
+            db.session.commit()
+    else:
+        # Handle unsuccessful response here
+        pass
+
+    response_data = response.json()
+    return response_data
+
