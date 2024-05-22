@@ -1,7 +1,6 @@
 """
 Module: Transactions
 """
-from datetime import datetime
 from app import db
 
 class MpesaTransaction(db.Model):
