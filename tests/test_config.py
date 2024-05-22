@@ -21,6 +21,7 @@ class TestConfig(unittest.TestCase):
         self.assertIsNotNone(app.config['MPESA_CONSUMER_SECRET'])
         self.assertIsNotNone(app.config['MPESA_SHORTCODE'])
         self.assertIsNotNone(app.config['MPESA_PASSKEY'])
+        self.assertIsNotNone(app.config['MPESA_CONFIRMATION_URL'])
 
     def test_database_uri(self):
         """Test if DATABASE_URI is not None."""
@@ -39,6 +40,7 @@ class TestConfig(unittest.TestCase):
         self.assertIsNotNone(os.getenv('CONSUMER_KEY'))
         self.assertIsNotNone(os.getenv('CONSUMER_SECRET'))
         self.assertIsNotNone(os.getenv('SHORTCODE'))
+        self.assertIsNotNone(os.getenv('CONFIRMATION_URL'))
         self.assertIsNotNone(os.getenv('PASSKEY'))
         self.assertIsNotNone(os.getenv('SQLALCHEMY_DATABASE_URI'))
         self.assertIsNotNone(os.getenv('FLASK_ENV'))

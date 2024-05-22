@@ -12,20 +12,20 @@ class TestMpesaTransaction(unittest.TestCase):
         self.transaction = MpesaTransaction(
             full_name="John Doe",
             phone_number="254700000000",
-            amount=100
+            amount=1
         )
 
     def test_attributes(self):
         """Test if attributes are set correctly."""
         self.assertEqual(self.transaction.full_name, "John Doe")
         self.assertEqual(self.transaction.phone_number, "254700000000")
-        self.assertEqual(self.transaction.amount, 100)
+        self.assertEqual(self.transaction.amount, 1)
 
     def test_repr(self):
         """Test the __repr__ method."""
         expected_repr = (
             "MpesaTransaction(id=None, full_name='John Doe', "
-            "phone_number='254700000000', amount=100)"
+            "phone_number='254700000000', amount=1)"
         )
         self.assertEqual(repr(self.transaction), expected_repr)
 

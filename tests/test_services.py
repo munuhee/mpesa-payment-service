@@ -1,29 +1,76 @@
-"""Module for testing service functions."""
-
 import unittest
-from app.services import generate_access_token, initiate_stk_push
+from unittest.mock import patch, MagicMock
+from datetime import datetime
+from app import app, db
+from app.services import (
+    generate_access_token,
+    initiate_stk_push,
+    query_transaction_status
+)
 
-class TestServices(unittest.TestCase):
-    """Test case for service functions."""
+class TestMpesaServices(unittest.TestCase):
 
-    def test_generate_access_token(self):
-        """Test generate_access_token function."""
-        # Call the function under test
-        access_token = generate_access_token()
+    def setUp(self):
+        with app.app_context():
+            # Set up an in-memory SQLite database for testing
+            app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+            db.create_all()
 
-        # Assertions
-        self.assertIsNotNone(access_token)
-        self.assertIsInstance(access_token, str)
+    def tearDown(self):
+        with app.app_context():
+            # Clean up the database after each test
+            db.session.remove()
+            db.drop_all()
 
-    def test_initiate_stk_push(self):
-        """Test initiate_stk_push function."""
-        # Call the function under test
-        response = initiate_stk_push(254700000000, 1)
+    @patch('app.services.requests.get')
+    def test_generate_access_token(self, mock_get):
+        expected_token = "c9SQxWWhmdVRlyh0zh8gZDTkubVF"
+        mock_get.return_value.json.return_value = {"access_token": expected_token}
+        token = generate_access_token()
+        self.assertEqual(token, expected_token)
 
-        # Assertions
-        self.assertIsNotNone(response)
-        self.assertIsInstance(response, dict)
-        self.assertIn('ResponseCode', response)
+    @patch('app.services.requests.post')
+    def test_initiate_stk_push(self, mock_post):
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "MerchantRequestID": "29115-34620561-1",
+            "CheckoutRequestID": "ws_CO_191220191020363925",
+            "ResponseCode": "0",
+            "ResponseDescription": "Success. Request accepted for processing",
+            "CustomerMessage": "Success. Request accepted for processing"
+        }
+        mock_post.return_value = mock_response
+
+        with app.app_context():
+            full_name = "John Doe"
+            phone_number = 254700000000
+            amount = 100
+            response = initiate_stk_push(full_name, phone_number, amount)
+
+            self.assertEqual(response['ResponseCode'], "0")
+            self.assertEqual(response['ResponseDescription'], "Success. Request accepted for processing")
+
+    @patch('app.services.requests.post')
+    def test_query_transaction_status(self, mock_post):
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "ResponseCode": "0",
+            "ResponseDescription": "The service request has been accepted successsfully",
+            "MerchantRequestID": "22205-34066-1",
+            "CheckoutRequestID": "ws_CO_13012021093521236557",
+            "ResultCode": "0",
+            "ResultDesc": "The service request is processed successfully."
+        }
+        mock_post.return_value = mock_response
+
+        with app.app_context():
+            checkout_request_id = "ws_CO_13012021093521236557"
+            response = query_transaction_status(checkout_request_id)
+
+            self.assertEqual(response['ResponseCode'], "0")
+            self.assertEqual(response['ResponseDescription'], "The service request has been accepted successsfully")
+            self.assertEqual(response['ResultCode'], "0")
+            self.assertEqual(response['ResultDesc'], "The service request is processed successfully.")
 
 if __name__ == '__main__':
     unittest.main()

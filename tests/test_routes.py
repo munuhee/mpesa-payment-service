@@ -2,7 +2,7 @@
 Unit tests for Payment service routes.
 
 This module tests the endpoints and functionality of the Payment service,
-specifically focusing on the M-Pesa STK push initiation endpoint.
+specifically focusing on the M-Pesa STK push initiation and transaction status query endpoints.
 """
 import unittest
 from unittest.mock import patch
@@ -46,7 +46,7 @@ class FlaskTestCase(unittest.TestCase):
         response = self.app.post('/initiate_mpesa_stk_push', json={
             'full_name': 'John Doe',
             'phone_number': '254700000000',
-            'amount': 100
+            'amount': 1
         })
 
         # Verify the response
@@ -68,7 +68,7 @@ class FlaskTestCase(unittest.TestCase):
         self.assertEqual(
             response.get_json()['error'],
             'Full name, phone number, and amount are required.'
-            )
+        )
 
     def test_initiate_mpesa_stk_push_invalid_phone_number(self):
         """Test initiating M-Pesa STK push with an invalid phone number."""
@@ -76,7 +76,7 @@ class FlaskTestCase(unittest.TestCase):
         response = self.app.post('/initiate_mpesa_stk_push', json={
             'full_name': 'John Doe',
             'phone_number': 'invalid_phone',
-            'amount': 100
+            'amount': 1
         })
 
         # Verify the response
@@ -97,6 +97,61 @@ class FlaskTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn('error', response.get_json())
         self.assertEqual(response.get_json()['error'], 'Invalid amount.')
+
+    @patch('app.services.query_transaction_status')
+    def test_query_transaction_status_success(self, mock_query_transaction_status):
+        """Test querying transaction status successfully."""
+        # Mock the query_transaction_status service response
+        mock_query_transaction_status.return_value = {
+            'ResponseCode': '0',
+            'ResponseDescription':'The service request has been accepted successsfully',
+            'MerchantRequestID':'7071-4170-a0e4-8345632bad44629026',
+            'CheckoutRequestID':'ws_CO_13012021093521236557',
+            'ResultCode': '0',
+            'ResultDesc':'The service request is processed successfully.'
+        }
+
+        # Send a POST request to query the transaction status
+        response = self.app.post('/query_transaction_status', json={
+            'checkout_request_id': 'ws_CO_13012021093521236557'
+        })
+
+        # Verify the response
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('ResponseCode', response.get_json())
+        self.assertEqual(response.get_json()['ResponseCode'], '0')
+
+    def test_query_transaction_status_missing_checkout_request_id(self):
+        """Test querying transaction status with missing checkout request ID."""
+        # Send a POST request with missing checkout request ID
+        response = self.app.post('/query_transaction_status', json={})
+
+        # Verify the response
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('error', response.get_json())
+        self.assertEqual(response.get_json()['error'], 'Checkout request ID is required.')
+
+    @patch('app.services.query_transaction_status')
+    def test_query_transaction_status_failure(self, mock_query_transaction_status):
+        """Test querying transaction status with a failure response."""
+        # Mock the query_transaction_status service response with an error
+        mock_query_transaction_status.return_value = {
+            "CheckoutRequestID": "ws_CO_22052024141856201700000000",
+            "MerchantRequestID": "1c5b-4ba8-815c-ac45c57a3db0683578",
+            "ResponseCode": "0",
+            "ResponseDescription": "The service request has been accepted successsfully",
+            "ResultCode": "1001",
+            "ResultDesc": "Unable to lock subscriber."
+        }
+
+        # Send a POST request to query the transaction status
+        response = self.app.post('/query_transaction_status', json={
+            'checkout_request_id': 'ws_CO_22052024141856201700000000'
+        })
+
+        # Verify the response
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()['ResultCode'], '1001')
 
 if __name__ == '__main__':
     unittest.main()
