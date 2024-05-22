@@ -17,6 +17,7 @@ MPESA_CONSUMER_KEY = os.environ.get('CONSUMER_KEY')
 MPESA_CONSUMER_SECRET = os.environ.get('CONSUMER_SECRET')
 MPESA_SHORTCODE = os.environ.get('SHORTCODE')
 MPESA_PASSKEY = os.environ.get('PASSKEY')
+MPESA_CONFIRMATION_URL = os.environ.get('CONFIRMATION_URL')
 
 # SQLite database URI
 if os.environ.get('FLASK_ENV') == 'testing':
