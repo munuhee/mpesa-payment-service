@@ -50,7 +50,7 @@ def initiate_stk_push(full_name, phone_number, amount):
         "PartyA": phone_number,
         "PartyB": int(app.config['MPESA_SHORTCODE']),
         "PhoneNumber": phone_number,
-        "CallBackURL": "https://d324-102-217-157-209.ngrok-free.app/mpesa_callback",
+        "CallBackURL": app.config['MPESA_CONFIRMATION_URL'],
         "AccountReference": "CompanyXLTD",
         "TransactionDesc": "Payment of X"
     }
@@ -95,7 +95,7 @@ def query_transaction_status(checkout_request_id):
     }
 
     response = requests.post(
-        'https://sandbox.safaricom.co.ke/mpesa/transactionstatus/v1/query',
+        'https://sandbox.safaricom.co.ke/mpesa/stkpushquery/v1/query',
         json=query_data,
         headers=headers,
         timeout=10
@@ -103,14 +103,13 @@ def query_transaction_status(checkout_request_id):
 
     # Save transaction details to database if the request was accepted for processing
     if 'ResultCode' in response and response['ResultCode'] == '0':
-        transaction = models.MpesaTransaction.query.filter_by(checkout_request_id=checkout_request_id).first()
+        transaction = models.MpesaTransaction.query.filter_by(
+            checkout_request_id=checkout_request_id
+        ).first()
         if transaction:
             transaction.status = 'Completed'
             db.session.commit()
-    else:
-        # Handle unsuccessful response here
-        pass
+        return response.json()
 
     response_data = response.json()
     return response_data
-

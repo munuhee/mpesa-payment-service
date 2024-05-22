@@ -70,6 +70,4 @@ def query_transaction_status():
     if 'ResponseCode' in response:
         return jsonify(response), 200
 
-    # Handle error response
-    error_message = response.get('errorMessage', 'Unknown error occurred.')
-    return jsonify({'error': error_message}), 500
+    return jsonify(response), 500
