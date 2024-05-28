@@ -1,0 +1,74 @@
+pipeline {
+    agent { label 'ubuntu-latest' }
+
+    environment {
+        FLASK_ENV = 'testing'
+        SECRET_KEY = credentials('SECRET_KEY')
+        CONSUMER_KEY = credentials('CONSUMER_KEY')
+        CONSUMER_SECRET = credentials('CONSUMER_SECRET')
+        SHORTCODE = credentials('SHORTCODE')
+        PASSKEY = credentials('PASSKEY')
+        CONFIRMATION_URL = credentials('CONFIRMATION_URL')
+        VALIDATION_URL = credentials('VALIDATION_URL')
+        SQLALCHEMY_DATABASE_URI = credentials('SQLALCHEMY_DATABASE_URI')
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Set up Python') {
+            steps {
+                script {
+                    def pythonVersion = '3.12'
+                    // Assuming pyenv or similar tool is available for setting up Python
+                    sh "pyenv install ${pythonVersion} || true"
+                    sh "pyenv global ${pythonVersion}"
+                }
+            }
+        }
+
+        stage('Install dependencies') {
+            steps {
+                sh """
+                python3 -m pip install --upgrade pip
+                pip install -r requirements.txt
+                """
+            }
+        }
+
+        stage('Run pylint') {
+            steps {
+                sh """
+                pip install pylint
+                pylint ./app ./tests --fail-under=8.5
+                """
+            }
+        }
+
+        stage('Run Tests and Calculate Coverage') {
+            steps {
+                sh """
+                pip install pytest pytest-cov
+                pytest -c pytest.ini --cov --cov-fail-under=90
+                """
+            }
+        }
+    }
+
+    post {
+        always {
+            junit '**/test-results.xml'
+            publishHTML(target: [
+                reportName: 'Coverage Report',
+                reportDir: 'htmlcov',
+                reportFiles: 'index.html',
+                alwaysLinkToLastBuild: true,
+                keepAll: true
+            ])
+        }
+    }
+}
